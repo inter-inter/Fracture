@@ -1,0 +1,167 @@
+TITLE:: Fracture
+summary:: Pitch-sensitive buffer recording and indexing utility
+categories:: Buffer, Live, Analysis, Machine Listening
+related:: Classes/FractureSynth, Classes/Buffer, Classes/Pitch, Classes/Amplitude
+
+
+
+DESCRIPTION::
+
+Fracture is a tool for live indexing of pitch-indexed chips from a buffer. During buffer recording, "chips" are recorded according to the input's satisfaction of amplitude and pitch consistency thresholds. Chips are events of the type \chip that play on their parent fracture's default synth, or another synth spawned by the object FractureSynth. Fracture works best with monophonic pitched audio sources, but can also be used for without the pitch feature for simple transient detection.
+
+CLASSMETHODS::
+
+method:: new
+Create a new Fracture.
+argument:: server
+The server on which to allocate the buffer
+argument:: in
+Input bus or integer specifying hardware input channel
+argument:: bufferSize
+The size in seconds of the internal buffer
+argument:: loopRecord
+true = continue to record the buffer once it is full, overwriting its original contents and replacing associated chips.
+false = stop recording the buffer once it is full and lock the fracture
+argument:: ampThresh
+Minimum amplitude level for chips to be recorded.
+argument:: pitchThresh
+Minimum pitch detectability value (0..1).
+argument:: minDur
+Minimum chip duration in seconds.
+argument:: maxDur
+Maximum chip duration in seconds.
+
+method:: load
+Load a fracture from disk.
+argument:: server
+The server on which to allocate the buffer
+argument:: path
+Directory containing a buffer (AIFF) and chips archive (.TXT) to be loaded. If none specified, select path from dialog.
+
+
+INSTANCEMETHODS::
+
+method:: open
+Start recording the fracture's buffer and indexing chips from the beginning or the point at which the fracture was last closed.
+
+method:: close
+Pause recording of the buffer. Chip library remains intact.
+
+method:: save
+Save the buffer and chip library to disk.
+argument:: path
+Directory in which the fracture's buffer (AIFF) and chips archive (.TXT) will be saved. If none specified, select path from dialog.
+
+method:: clear
+Stop recording processes and clear the buffer and chip library
+
+method:: lock
+Lock the fracture to prevent it from being opened. A Fracture cannot be unlocked once it has been locked.
+
+method:: chips
+returns:: The array of chips recorded by this buffer.
+
+method:: notes
+returns:: An array of available MIDI pitches encompassed by the chips in the fracture's library.
+
+method:: noteChips
+returns:: An array of chips that match the given MIDI pitch or array of pitches.
+
+method:: playNote
+Play a random chip matching the note or array of notes provided.
+
+method:: buffer
+returns:: The fracture's buffer.
+
+method:: filePath
+returns:: The path of this fracture's save directory (if the fracture has been saved or loaded).
+
+method:: defaultSynth
+Get or set the fracture's default SynthDef (the default instrument for all chips created by this fracture). See link::Classes/FractureSynth::.
+
+method:: writeInterval
+Get or set the interval at which the fracture analyzes audio and writes chips.
+
+method:: clearInterval
+Get or set the interval at which the fracture refreshes its chip library.
+
+method:: ampThresh
+Get or set the amplitude threshold of this fracture.
+
+method:: pitchThresh
+Get or set the pitch consistency threshold of this fracture (0..1).
+
+method:: minDur
+Get or set the minimum chip duration for this fracture in seconds.
+
+method:: minDur
+Get or set the maximum chip duration for this fracture in seconds.
+
+
+EXAMPLES::
+code::
+
+//Create a new fracture:
+f = Fracture.new(s, 0)
+
+//Start recording and indexing "chips":
+f.open
+
+// Hum some notes...
+
+//Now call "chips" to see the events we've created:
+f.chips
+
+//Each chip is stored as a modified note event. Play a random chip from the buffer:
+f.chips.choose.play
+
+//You can also choose an available note from the chips library...
+n = f.notes.choose
+
+//...and play back chips of that pitch:
+f.noteChips(n).choose.play
+
+//A Fracture comes with a default synth for chip playback:
+f.defaultSynth
+
+//You can create a new SynthDefs with FractureSynth for variable pitch playback:
+i = FractureSynth.new(f, 2, pan: \pos, rate: 2)
+j = FractureSynth.new(f, 2, pan: \pitch, env: [0.8, 0.1, \sine], rate: 0.5)
+f.chips.choose.put(\instrument, i).play // play with position-based panning at a rate of 2
+f.chips.choose.put(\instrument, j).play //play with pitch-based panning and narrower envelope at a rate of 0.5
+
+//Use patterns to integrate chips into pitch-based playback streams:
+
+//nice blended single tone
+(
+p = Pbindf(Pcollect({|n| f.noteChips(n).choose ?? Rest(0.2)}, Pseq([f.notes.choose], inf)),
+	\dur, Pfunc({|e| (e[\end] - e[\start])/f.buffer.sampleRate}),
+	\amp, Penv([0, 0.5, 0], [0.2, 4], 'sine'),
+	\stretch, 0.5,
+).play
+)
+p.stop
+
+//crazy rate envelope
+(
+p = Pbindf(Pseq(f.chips, inf),
+	\dur, Pfunc({|e| (e[\end] - e[\start])/f.buffer.sampleRate}),
+	\pan, Pn(Pseq([-1, 1, -0.6, 0.6, -0.2, 0.2, 0]), inf),
+	\rate, Pn(Penv([1, 2, 0.3, 1], [0.5, 0.5, 0.5]), inf),
+	\amp, Penv([0, 0.5, 0], [3, 4], 'sine'),
+).play
+)
+p.stop
+
+//percussive pattern going up the scale
+(
+i = FractureSynth.new(f, 2, \pitch, env: [0.05, 0.8, 'sine']);
+p = Pbindf(Pseq(f.chips, inf),
+	\dur, 0.3,
+	\zoom, 0.6,
+	\instrument, i,
+).play
+)
+p.stop
+
+::

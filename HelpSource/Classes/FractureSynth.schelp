@@ -1,0 +1,58 @@
+TITLE:: FractureSynth
+summary:: Generate SynthDefs for granular playback of chips from a fracture.
+categories:: Playback, Buffer
+related:: Classes/Fracture, Classes/SynthDef, Classes/Buffer
+
+DESCRIPTION::
+FractureSynth returns a SynthDef capable of playing back a chip of the given fracture object. It also defines the modified note event type /fchip, which makes chips playable. Every fracture object automatically creates a default SynthDef on which its chips play back.
+
+
+CLASSMETHODS::
+
+METHOD:: new
+Create a new SynthDef for playing fracture chips.
+
+ARGUMENT:: fracture
+The fracture to reference.
+
+ARGUMENT:: numChannels
+Number of channels for playback (1 or 2).
+
+ARGUMENT:: pan
+Choose default pan position for playback (float -1..1), or specify pan behavior: \scatter = play each chip at random pan position, \pitch = play chips arrayed by pitch (left low, right high), \pos = pan position matches playhead position in the buffer
+
+ARGUMENT:: gain
+Apply db gain to playback.
+
+ARGUMENT:: normalize
+Specify how much normalization to apply to output (1 = all chips reach peak amplitude, 0 = no normalization).
+
+ARGUMENT:: env
+An array describing a segmented array [attack ratio, release ratio, curve]. For example [0.1, 0.5, \sine] means attack for 0.1 * the length of the chip, release for half the length of the chip, and use a sine curve shape. Alternatively, use \sine or \triangle to use an even sine or triangle curve over the length of the chip.
+
+ARGUMENT:: rate
+Default rate of playback. Whether this rate is negative or positive determines whether to start playback from the start or the end of the chip. (NOTE: the synth will also take an argument "rate" which will act as a scalar for this rate.)
+
+returns:: a SynthDef with the following arguments:
+definitionlist::
+## offset
+|| Offset start position of the chip (in samples!)
+## clip
+|| Scale chip length (1 = entire chip, 0.5 = play from start of chip to halfway through chip).
+## zoom
+|| Scale chip length (0 = no zoom, 0.5 = play half of the chip, maintaining chip center).
+## amp
+|| Scale amplitude.
+## rate
+|| Scale playrate.
+## pan
+|| Set pan position. (NOTE: If outside standard pan range (-1..1) then SynthDef defaults to pan behavior specified on initiation (\scatter, \pos, etc.)).
+## out
+|| Set output.
+::
+
+INSTANCEMETHODS::
+
+METHOD:: fracture
+
+returns:: The fracture associated with this FractureSynth.
