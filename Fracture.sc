@@ -1,8 +1,8 @@
-Fracture { var <server, <in, <bufferSize, <loopRecord, <>ampThresh, <>pitchThresh, <>minDur, <>maxDur;
+Fracture { var <server, <in, <bufferSize, <loopRecord, <>ampThresh, <>pitchThresh, <>minDur, <>maxDur, <>pitchIn;
 	var <buffer, controlBus, record, collectchips, chips, <notes, collectRoutines, <>defaultSynth, <>writeInterval = 0.02, <>clearInterval = 0.2, <isEmpty, <isLocked, <filePath;
 
-	*new { arg server, in = 0, bufferSize = 60, loopRecord = true, ampThresh = 0.01, pitchThresh = 0.9, minDur = 0.1, maxDur = inf;
-		^super.newCopyArgs(server, in, bufferSize, loopRecord, ampThresh, pitchThresh, minDur, maxDur).init
+	*new { arg server, in = 0, bufferSize = 60, loopRecord = true, ampThresh = 0.01, pitchThresh = 0.9, minDur = 0.1, maxDur = inf, pitchIn;
+		^super.newCopyArgs(server, in, bufferSize, loopRecord, ampThresh, pitchThresh, minDur, maxDur, pitchIn).init
 	}
 
 	*load { arg server, path;
@@ -52,7 +52,7 @@ Fracture { var <server, <in, <bufferSize, <loopRecord, <>ampThresh, <>pitchThres
 
 	}
 
-	openFunctions { var addchip, draftpitch, peakAmp = 0, draftchip = (), writechips, clearchips;
+	openFunctions { var addchip, draftpitch = nil, peakAmp = 0, draftchip = (), writechips, clearchips;
 
 		addchip = { arg chip;
 			if ( [\start, \end, \pitch, \cycle, \peakAmp].any({|x| chip[x] == nil}) || (chip == ()) || (chip == nil) )
@@ -60,9 +60,10 @@ Fracture { var <server, <in, <bufferSize, <loopRecord, <>ampThresh, <>pitchThres
 			{
 				var chipDur;
 				chipDur = (chip[\end] - chip[\start])/buffer.sampleRate;
-				if ((chips.any({|x| x == chip})).not && (chipDur > minDur) && (chipDur < maxDur))
+				if ((chipDur > minDur) && (chipDur < maxDur))
 				{
 					var newchip;
+					//("trying to add " + chip).postln;
 					newchip = chip.putPairs([\type, \fchip, \fracture, this]);
 					chips = chips.add(newchip);
 				}
@@ -77,27 +78,38 @@ Fracture { var <server, <in, <bufferSize, <loopRecord, <>ampThresh, <>pitchThres
 				pos = controlBus[0].getSynchronous;
 				amp = controlBus[1].getSynchronous;
 				hasFreq = controlBus[2].getSynchronous;
-				pitch = controlBus[3].getSynchronous.cpsmidi.round(1);
+				//Use pitchIn control bus for pitch input if supplied
+				if (pitchIn.class == Bus) {
+					pitch = pitchIn.getSynchronous
+				} {
+					pitch = controlBus[3].getSynchronous.cpsmidi.round(1);
+				};
 				currentcycle = controlBus[4].getSynchronous;
 
-				if ((amp ?? 0 > ampThresh) && (hasFreq ?? 0 > pitchThresh))
-				{
-					if (amp > peakAmp) {peakAmp = amp} {};
-					if (pitch == draftpitch)
-					{
-						draftchip = draftchip.putPairs([\end, pos, \peakAmp, peakAmp])
-					}
-					{
-						if (draftchip.notNil, {addchip.(draftchip)}, {});
+				if ((amp ?? 0 > ampThresh) && (hasFreq ?? 0 > pitchThresh)) {
+					if (amp > peakAmp) {peakAmp = amp}; //set the peak amplitude if exceeded
+					if (pitch == draftpitch) { //if pitch is consistent with last heard pitch extend the chip
+						draftchip = draftchip.putPairs([\end, pos, \peakAmp, peakAmp]);
+						//"A".postln; draftchip.postln; draftpitch.postln;
+					} { // else add the currently held chip and set drafts
+						if (draftchip != () ) {
+							//"B".postln; draftchip.postln; draftpitch.postln;
+							addchip.(draftchip)
+						};
 						draftpitch = pitch;
 						draftchip = (\pitch: draftpitch, \start: pos, \cycle: currentcycle);
 						peakAmp = amp;
 					}
-				}
-				{
-					if (draftchip.notNil) {addchip.(draftchip)} {}
+				} { // if thresholds not met, add currently held chip and reset drafts
+					if (draftchip != () ) {
+						draftchip = draftchip.putPairs([\end, pos, \peakAmp, peakAmp]);
+						//"C".postln; draftchip.postln; draftpitch.postln;
+						addchip.(draftchip);
+						draftchip = ();
+						draftpitch = nil;
+						peakAmp = 0;
+					}
 				};
-
 				writeInterval.wait;
 			}
 		};
@@ -112,7 +124,7 @@ Fracture { var <server, <in, <bufferSize, <loopRecord, <>ampThresh, <>pitchThres
 				{}
 				{
 					chips = chips.reject{|x| (x[\start] < pos) && (x[\cycle] < currentcycle)};
-					notes = try{chips.collect({|x| x[\pitch]}).asSet.asArray.sort} {[]};
+					notes = try{chips.collect({|x| x[\pitch]}).asSet.asArray} {[]};
 				};
 
 				clearInterval.wait;
@@ -173,7 +185,7 @@ Fracture { var <server, <in, <bufferSize, <loopRecord, <>ampThresh, <>pitchThres
 		if (isLocked == true) {^this};
 		if (isEmpty == false) {
 			record.set(\running, 0);
-			notes = try{chips.collect({|x| x[\pitch]}).asSet.asArray.sort}
+			notes = try{chips.collect({|x| x[\pitch]}).asSet.asArray}
 		}
 	}
 
